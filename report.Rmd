@@ -1,0 +1,521 @@
+---
+title: Mythbusting the Stereotypical Thai People of USA
+output: 
+  html_document:
+    toc: true # table of content true
+    toc_float: true
+    depth: 3  # upto three depths of headings (specified by #, ## and ###)
+    number_sections: true  ## if you want number sections at each table header
+    theme: spacelab  # many options for theme, this one is my favorite.
+    highlight: tango  # specifies the syntax highlighting style
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+# Executive Summary
+
+We use the `prop_df` dataset dervied from the US Census according to the `codebook` to perform proportional z-tests on characteristics of Thai population in the US and the general US population.
+
+Note that we cherrypick only the most interesting features. Thus, this is might not be the most accurate way (p-value interpretation shenanigans aside) to prove or debunk these preconceptions about Thai people in the US and a lot of it will rely on the context; however, this is as close as aggregate numbers can take us. 
+
+```{r library}
+library(data.table)
+library(sqldf)
+library(DT)
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+```
+
+```{r load df, results='hide'}
+input <- 'files/'
+prop_df <- fread(paste0(input,'prop_df.csv'))
+```
+
+# They Are Lazy?
+
+One of the strongest stereotypes about Thai people, and perhaps immigrants overall reinforced by [a certain looney-tunesque character of a presidential candidate](https://www.youtube.com/watch?v=DnpO_RTSNmQ), is that they are lazy welfare cheaters who simply came to sit around waiting to be naturalized. However, if *lazy* means unemployed, then statistics significantly disagrees with the premise (pun intended). The difference between percentage of Thai people and the general US population in the workforce is almost negligible. Approximately 65% of Thai people in the US are employed as compared to 63% of the US population. Therefore, the first myth is debunked; Thai people came to the US to work, at least as often times or more than the next American.
+
+```{r employment plot}
+employment <- prop_df[prop_df$d_cat=='Estimate..EMPLOYMENT.STATUS_Population.16.years.and.over']
+
+employment <- subset(employment, select = -c(d_cat,thai_total,us_total))
+employment$thai_percentage <- employment$thai_percentage / 100
+employment$us_percentage <- employment$us_percentage / 100
+employment$thai_num <- prettyNum(round(employment$thai_num,0),big.mark=",",scientific=FALSE)
+employment$us_num <- prettyNum(round(employment$us_num,0),big.mark=",",scientific=FALSE)
+employment <- arrange(employment, -thai_percentage)
+
+employment$diff <- employment$thai_percentage - employment$us_percentage 
+employment$sign <- ifelse(employment$diff>=0, 'pos', 'neg')
+ggplot(employment,aes(x = var,y = diff, fill=sign)) + xlab('Groups') + ylab('Diff. Percentage') +
+    geom_bar(stat='identity',position = "dodge") + scale_y_continuous(labels = scales::percent) +
+    scale_fill_manual(values=c('#8C2318', '#5E8C6A')) +
+    scale_x_discrete(labels = c('Employed','Unemployed')) +
+    guides(fill=FALSE)
+```
+
+```{r employment table}
+employment <- employment[,1:6]
+datatable(employment,
+          colnames = c('Employment Status' = 1,
+                       '% Thai' = 2,
+                       '# Thai' = 3,
+                       '% US' = 4,
+                       '# US' = 5,
+                       'Z-score' = 6),
+                      class = 'cell-border stripe', 
+rownames = FALSE,
+style='bootstrap',
+options = 
+list( pageLength = 20,
+lengthChange = TRUE,
+dom = 't',
+initComplete = JS(
+"function(settings, json) {",
+"$(this.api().table().header()).css({'background-color': '#446E9B', 'color': '#ffffff'});",
+"}"))) %>% 
+formatPercentage(c('% Thai','% US'), 0) %>%
+formatRound('Z-score',2) %>%
+formatStyle(
+  'Z-score',
+  color = 'white',
+  backgroundColor = styleInterval(c(-2.576,2.576), c('#8C2318','#F2C45A', '#5E8C6A'))
+) 
+```
+
+# They Open Thai Restaurants?
+
+But what types of work do they do? Another widespread preconception is that Thai people come to open Thai restaurants because obviously you can charge $30 for a mediocre Pad Thai that nobody would know is nothing like the authentic version (Fun fact: Pad Thai is actually NOT a traditional Thai dish per se; it was [invented during a nationalist government to reinforce 'Thai-ness'](https://en.wikipedia.org/wiki/Pad_Thai#History)). In order to verify the claim, we first look at the difference in types of occupation. Thai people in the US are about 10% more likely to be in the service industry. This reinforces our myth.
+
+```{r occupation type plot}
+occu_type <- prop_df[prop_df$d_cat=='Estimate..OCCUPATION_Civilian.employed.population.16.years.and.over']
+
+occu_type <- subset(occu_type, select = -c(d_cat,thai_total,us_total))
+occu_type <- arrange(occu_type,var)
+occu_type$var <- c('Management & Science','Natural Resources','Production',
+                              'Sales & Office','Service')
+occu_type$thai_percentage <- occu_type$thai_percentage / 100
+occu_type$us_percentage <- occu_type$us_percentage / 100
+occu_type$thai_num <- prettyNum(round(occu_type$thai_num,0),big.mark=",",scientific=FALSE)
+occu_type$us_num <- prettyNum(round(occu_type$us_num,0),big.mark=",",scientific=FALSE)
+occu_type <- arrange(occu_type, -thai_percentage)
+
+
+occu_type$diff <- occu_type$thai_percentage - occu_type$us_percentage 
+occu_type$sign <- ifelse(occu_type$diff>=0, 'pos', 'neg')
+ggplot(occu_type,aes(x = var,y = diff, fill=sign)) + xlab('Groups') + ylab('Diff. Percentage') +
+    geom_bar(stat='identity',position = "dodge") + scale_y_continuous(labels = scales::percent) +
+    scale_fill_manual(values=c('#8C2318', '#5E8C6A')) +
+    guides(fill=FALSE) +
+    scale_x_discrete(labels = c('Management & Science','Natural Resources','Production',
+                              'Sales & Office','Service')) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+```{r occupation type table}
+occu_type <- occu_type[,1:6]
+
+datatable(occu_type,
+          colnames = c('Occupation Type' = 1,
+                       '% Thai' = 2,
+                       '# Thai' = 3,
+                       '% US' = 4,
+                       '# US' = 5,
+                       'Z-score' = 6),
+                      class = 'cell-border stripe', 
+rownames = FALSE,
+style='bootstrap',
+options = 
+list( pageLength = 20,
+lengthChange = TRUE,
+dom = 't',
+initComplete = JS(
+"function(settings, json) {",
+"$(this.api().table().header()).css({'background-color': '#446E9B', 'color': '#ffffff'});",
+"}"))) %>% 
+formatPercentage(c('% Thai','% US'), 0) %>%
+formatRound('Z-score',2) %>%
+formatStyle(
+  'Z-score',
+  color = 'white',
+  backgroundColor = styleInterval(c(-2.576,2.576), c('#8C2318','#F2C45A', '#5E8C6A'))
+) 
+```
+
+When we dig deeper into the industry in which Thai people work in, we found that they are 15% more likely to be in `Arts, Entertainment & Food`, which almost cries out Thai restaurant owners at an overwhelming statistical significance. It is true that without a comprehensive survey, there is no way, much of this remains a guesswork; for instance, a lot of them might be artists or performers instead of food workers. But since it is highly unlikely anyone would care about enough about Thai people in the US to do this very specific study on some 300,000 people of minority population (not to mention the oh-so-mighty Thai government whose stats bureau provides census data in [pdf](http://web.nso.go.th/en/survey/pop_character/pop_character.htm)), we make the figurative leap of faith here and 'confirm' that many a Thai person indeed come to the US to open Thai restaurants.
+
+
+```{r industry plot}
+industry <- prop_df[prop_df$d_cat=='Estimate..INDUSTRY_Civilian.employed.population.16.years.and.over']
+
+industry <- subset(industry, select = -c(d_cat,thai_total,us_total))
+industry <- arrange(industry, var)
+industry$var <- c('Agriculture','Arts & Food','Construction','Education','Finance',
+                              'Information','Manufacturing','Other Services',
+                              'Prof Service','Public Admin','Retail','Transportation',
+                              'Wholesale')
+industry$thai_percentage <- industry$thai_percentage / 100
+industry$us_percentage <- industry$us_percentage / 100
+industry$thai_num <- prettyNum(round(industry$thai_num,0),big.mark=",",scientific=FALSE)
+industry$us_num <- prettyNum(round(industry$us_num,0),big.mark=",",scientific=FALSE)
+industry <- arrange(industry, -thai_percentage)
+
+
+industry$diff <- industry$thai_percentage - industry$us_percentage 
+industry$sign <- ifelse(industry$diff>=0, 'pos', 'neg')
+ggplot(industry,aes(x = var,y = diff, fill=sign)) + xlab('Groups') + ylab('Diff. Percentage') +
+    geom_bar(stat='identity',position = "dodge") + scale_y_continuous(labels = scales::percent) +
+    scale_fill_manual(values=c('#8C2318', '#5E8C6A')) +
+    guides(fill=FALSE) +
+    scale_x_discrete(labels = c('Agriculture','Arts & Food','Construction','Education','Finance',
+                              'Information','Manufacturing','Other Services',
+                              'Prof Service','Public Admin','Retail','Transportation',
+                              'Wholesale')) +
+   theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r industry table}
+industry<- industry[,1:6]
+
+datatable(industry,
+          colnames = c('Industry' = 1,
+                       '% Thai' = 2,
+                       '# Thai' = 3,
+                       '% US' = 4,
+                       '# US' = 5,
+                       'Z-score' = 6),
+                      class = 'cell-border stripe', 
+rownames = FALSE,
+style='bootstrap',
+options = 
+list( pageLength = 20,
+lengthChange = TRUE,
+dom = 't',
+initComplete = JS(
+"function(settings, json) {",
+"$(this.api().table().header()).css({'background-color': '#446E9B', 'color': '#ffffff'});",
+"}"))) %>% 
+formatPercentage(c('% Thai','% US'), 0) %>%
+formatRound('Z-score',2) %>%
+formatStyle(
+  'Z-score',
+  color = 'white',
+  backgroundColor = styleInterval(c(-2.576,2.576), c('#8C2318','#F2C45A', '#5E8C6A'))
+) 
+```
+
+# They Are Gold Diggers?
+
+*Mia Farang*, literally wife of a (white) westerner, is a well-known derogatory term used to describe low-income Thai women from the rural area, most likely former prostitutes, who are preferred as exotic items by and thus married to white westerners (farang in Thai). The premise is that a lot of Thai female in the US are *Mia Farang*. The 7% difference in percentage of female population who are married between Thai and the general population might make us want to jump to conclusion and confirm the stereotype. Nonetheless, the limitation of our study means that Thai female might just tend to get married more than the general US population and not necessarily with a white male. 
+
+We took another angle and look at the difference between naturalization of Thai and the general US population. If Thai female tends to get married more (as we already confirmed) and also naturalized more, the *Mia Farang* hypothesis might be more viable. We saw that indeed Thai female are about 10% more likely than the general US population to be naturalized but this is most likely simply because there are also higher percentage of Thai female in the US than the general US population.
+
+Unfortunately with the evidence, we have it is difficult to either debunk or confirm the Thai gold digger myth.
+
+```{r marital plots}
+
+f_marital <- prop_df[prop_df$d_cat=='Estimate..MARITAL.STATUS_Female.15.years.and.over']
+f_marital <- subset(f_marital, select = -c(d_cat,thai_total,us_total))
+f_marital$thai_percentage <- f_marital$thai_percentage / 100
+f_marital$us_percentage <- f_marital$us_percentage / 100
+f_marital$thai_num <- prettyNum(round(f_marital$thai_num,0),big.mark=",",scientific=FALSE)
+f_marital$us_num <- prettyNum(round(f_marital$us_num,0),big.mark=",",scientific=FALSE)
+f_marital <- arrange(f_marital, -thai_percentage)
+
+f_marital$diff <- f_marital$thai_percentage - f_marital$us_percentage 
+f_marital$sign <- ifelse(f_marital$diff>=0, 'pos', 'neg')
+g1<-ggplot(f_marital,aes(x = var,y = diff, fill=sign)) + xlab('Thai Female vs US Female') + 
+    ylab('Diff. Percentage') +
+    geom_bar(stat='identity',position = "dodge") + scale_y_continuous(labels = scales::percent) +
+    scale_fill_manual(values=c('#8C2318', '#5E8C6A')) +
+    guides(fill=FALSE) +
+    scale_x_discrete(labels = c('Divorced','Single','Married','Sep.','Widowed')) 
+t_marital <- prop_df[prop_df$d_cat=='Estimate..MARITAL.STATUS_Population.15.years.and.over']
+t_marital <- subset(t_marital, select = -c(d_cat,thai_total,us_total))
+t_marital$thai_percentage <- t_marital$thai_percentage / 100
+t_marital$us_percentage <- t_marital$us_percentage / 100
+t_marital$thai_num <- prettyNum(round(t_marital$thai_num,0),big.mark=",",scientific=FALSE)
+t_marital$us_num <- prettyNum(round(t_marital$us_num,0),big.mark=",",scientific=FALSE)
+t_marital <- arrange(t_marital, -thai_percentage)
+
+t_marital$diff <- t_marital$thai_percentage - t_marital$us_percentage 
+t_marital$sign <- ifelse(t_marital$diff>=0, 'pos', 'neg')
+g2<-ggplot(t_marital,aes(x = var,y = diff, fill=sign)) + xlab('All Thai vs All US') + 
+    ylab('Diff. Percentage') +
+    geom_bar(stat='identity',position = "dodge") + scale_y_continuous(labels = scales::percent) +
+    scale_fill_manual(values=c('#8C2318', '#5E8C6A')) +
+    guides(fill=FALSE) +
+    scale_x_discrete(labels = c('Divorced','Single','Married','Sep.','Widowed'))
+
+naturalized <- prop_df[prop_df$d_cat=='Estimate..PLACE.OF.BIRTH..CITIZENSHIP.STATUS.AND.YEAR.OF.ENTRY_Foreign.born..naturalized.U.S..citizen']
+
+naturalized <- subset(naturalized, select = -c(d_cat,thai_total,us_total))
+naturalized$thai_percentage <- naturalized$thai_percentage / 100
+naturalized$us_percentage <- naturalized$us_percentage / 100
+naturalized$thai_num <- prettyNum(round(naturalized$thai_num,0),big.mark=",",scientific=FALSE)
+naturalized$us_num <- prettyNum(round(naturalized$us_num,0),big.mark=",",scientific=FALSE)
+naturalized <- arrange(naturalized, -thai_percentage)
+
+naturalized$diff <- naturalized$thai_percentage - naturalized$us_percentage 
+naturalized$sign <- ifelse(naturalized$diff>=0, 'pos', 'neg')
+g3<-ggplot(naturalized,aes(x = var,y = diff, fill=sign)) + 
+    xlab('Naturalized Thai vs Naturalized US') + 
+    ylab('Diff. Percentage') +
+    geom_bar(stat='identity',position = "dodge") + scale_y_continuous(labels = scales::percent) +
+    scale_fill_manual(values=c('#8C2318', '#5E8C6A')) +
+    guides(fill=FALSE) 
+
+gender <- prop_df[prop_df$d_cat=='Estimate..SEX.AND.AGE_Total.population']
+gender <- subset(gender, select = -c(d_cat,thai_total,us_total))
+gender$thai_percentage <- gender$thai_percentage / 100
+gender$us_percentage <- gender$us_percentage / 100
+gender$thai_num <- prettyNum(round(gender$thai_num,0),big.mark=",",scientific=FALSE)
+gender$us_num <- prettyNum(round(gender$us_num,0),big.mark=",",scientific=FALSE)
+gender <- arrange(gender, -thai_percentage)
+
+gender$diff <- gender$thai_percentage - gender$us_percentage 
+gender$sign <- ifelse(gender$diff>=0, 'pos', 'neg')
+g4<-ggplot(gender,aes(x = var,y = diff, fill=sign)) + 
+    xlab('Naturalized Thai vs Naturalized US') + 
+    ylab('Diff. Percentage') +
+    geom_bar(stat='identity',position = "dodge") + scale_y_continuous(labels = scales::percent) +
+    scale_fill_manual(values=c('#8C2318', '#5E8C6A')) +
+    guides(fill=FALSE) 
+
+
+grid.arrange(g1,g2,g3,g4)
+```
+
+
+```{r, female marital table}
+f_marital<-f_marital[,1:6]
+datatable(f_marital,
+          colnames = c('Female Marital Status' = 1,
+                       '% Thai' = 2,
+                       '# Thai' = 3,
+                       '% US' = 4,
+                       '# US' = 5,
+                       'Z-score' = 6),
+                      class = 'cell-border stripe', 
+rownames = FALSE,
+style='bootstrap',
+options = 
+list( pageLength = 20,
+lengthChange = TRUE,
+dom = 't',
+initComplete = JS(
+"function(settings, json) {",
+"$(this.api().table().header()).css({'background-color': '#446E9B', 'color': '#ffffff'});",
+"}"))) %>% 
+formatPercentage(c('% Thai','% US'), 0) %>%
+formatRound('Z-score',2) %>%
+formatStyle(
+  'Z-score',
+  color = 'white',
+  backgroundColor = styleInterval(c(-2.576,2.576), c('#8C2318','#F2C45A', '#5E8C6A'))
+) 
+```
+
+```{r total marital table}
+t_marital<-t_marital[,1:6]
+datatable(t_marital,
+          colnames = c('Total Marital Status' = 1,
+                       '% Thai' = 2,
+                       '# Thai' = 3,
+                       '% US' = 4,
+                       '# US' = 5,
+                       'Z-score' = 6),
+                      class = 'cell-border stripe', 
+rownames = FALSE,
+style='bootstrap',
+options = 
+list( pageLength = 20,
+lengthChange = TRUE,
+dom = 't',
+initComplete = JS(
+"function(settings, json) {",
+"$(this.api().table().header()).css({'background-color': '#446E9B', 'color': '#ffffff'});",
+"}"))) %>% 
+formatPercentage(c('% Thai','% US'), 0) %>%
+formatRound('Z-score',2) %>%
+formatStyle(
+  'Z-score',
+  color = 'white',
+  backgroundColor = styleInterval(c(-2.576,2.576), c('#8C2318','#F2C45A', '#5E8C6A'))
+) 
+```
+
+```{r naturalized table}
+naturalized<-naturalized[,1:6]
+datatable(naturalized,
+          colnames = c('Naturalized by Gender' = 1,
+                       '% Thai' = 2,
+                       '# Thai' = 3,
+                       '% US' = 4,
+                       '# US' = 5,
+                       'Z-score' = 6),
+                      class = 'cell-border stripe', 
+rownames = FALSE,
+style='bootstrap',
+options = 
+list( pageLength = 20,
+lengthChange = TRUE,
+dom = 't',
+initComplete = JS(
+"function(settings, json) {",
+"$(this.api().table().header()).css({'background-color': '#446E9B', 'color': '#ffffff'});",
+"}"))) %>% 
+formatPercentage(c('% Thai','% US'), 0) %>%
+formatRound('Z-score',2) %>%
+formatStyle(
+  'Z-score',
+  color = 'white',
+  backgroundColor = styleInterval(c(-2.576,2.576), c('#8C2318','#F2C45A', '#5E8C6A'))
+) 
+```
+
+
+```{r gender table}
+gender<-gender[,1:6]
+datatable(gender,
+          colnames = c('Gender' = 1,
+                       '% Thai' = 2,
+                       '# Thai' = 3,
+                       '% US' = 4,
+                       '# US' = 5,
+                       'Z-score' = 6),
+                      class = 'cell-border stripe', 
+rownames = FALSE,
+style='bootstrap',
+options = 
+list( pageLength = 20,
+lengthChange = TRUE,
+dom = 't',
+initComplete = JS(
+"function(settings, json) {",
+"$(this.api().table().header()).css({'background-color': '#446E9B', 'color': '#ffffff'});",
+"}"))) %>% 
+formatPercentage(c('% Thai','% US'), 0) %>%
+formatRound('Z-score',2) %>%
+formatStyle(
+  'Z-score',
+  color = 'white',
+  backgroundColor = styleInterval(c(-2.576,2.576), c('#8C2318','#F2C45A', '#5E8C6A'))
+) 
+```
+
+# They Are Living It Up In Big Houses?
+
+The next popular myth is that Thai people in the US are living la vida loca in the land of opportunities. They supposedly have big houses and send tons of money to their relatives back home in Thailand. According to the US census, most of them, more precisely about 60% of them, still live in one-unit housing, but we did found that Thai people in the US are actually about 15% more likely to occupy 5 or more units of housing. So yes and no for this one.
+
+```{r housing plot}
+housing <- prop_df[prop_df$d_cat=='Estimate..UNITS.IN.STRUCTURE_Occupied.housing.units']
+
+housing <- subset(housing, select = -c(d_cat,thai_total,us_total))
+housing$thai_percentage <- housing$thai_percentage / 100
+housing$us_percentage <- housing$us_percentage / 100
+housing$thai_num <- prettyNum(round(housing$thai_num,0),big.mark=",",scientific=FALSE)
+housing$us_num <- prettyNum(round(housing$us_num,0),big.mark=",",scientific=FALSE)
+housing <- arrange(housing, -thai_percentage)
+
+housing$diff <- housing$thai_percentage - housing$us_percentage 
+housing$sign <- ifelse(housing$diff>=0, 'pos', 'neg')
+ggplot(housing,aes(x = var,y = diff, fill=sign)) + 
+    xlab('Groups') + 
+    ylab('Diff. Percentage') +
+    geom_bar(stat='identity',position = "dodge") + scale_y_continuous(labels = scales::percent) +
+    scale_fill_manual(values=c('#8C2318', '#5E8C6A')) +
+    guides(fill=FALSE) 
+
+```
+
+```{r housing table}
+
+housing<-housing[,1:6]
+datatable(housing,
+          colnames = c('Housing' = 1,
+                       '% Thai' = 2,
+                       '# Thai' = 3,
+                       '% US' = 4,
+                       '# US' = 5,
+                       'Z-score' = 6),
+                      class = 'cell-border stripe', 
+rownames = FALSE,
+style='bootstrap',
+options = 
+list( pageLength = 20,
+lengthChange = TRUE,
+dom = 't',
+initComplete = JS(
+"function(settings, json) {",
+"$(this.api().table().header()).css({'background-color': '#446E9B', 'color': '#ffffff'});",
+"}"))) %>% 
+formatPercentage(c('% Thai','% US'), 0) %>%
+formatRound('Z-score',2) %>%
+formatStyle(
+  'Z-score',
+  color = 'white',
+  backgroundColor = styleInterval(c(-2.576,2.576), c('#8C2318','#F2C45A', '#5E8C6A'))
+) 
+```
+
+# They Still Can't Help But Miss Thailand?
+
+To be honest, this last myth might be too much of a stretch to prove with census data. It goes like this: a lot of Thai people who came to the US fail to assimilate and end up retreating to the comfort of the Internet, facebooking with friends and family back home being their only day-to-day human interactions. We tried to look at the difference in household broadbrand subscription and computer ownership to make the inference. Thai people households in the US are indeed more likely to have a broadbrand subscription and a computer; however, there are many more possiblities beside Internet addiction and anti-social behaviors. For instance, the people might simply be more tech savvy than the general US population. Again, this one is inconclusive.
+
+```{r internet plot}
+internet <- prop_df[prop_df$d_cat=='Estimate..COMPUTERS.AND.INTERNET.USE_Total.households']
+
+internet <- subset(internet, select = -c(d_cat,thai_total,us_total))
+internet$thai_percentage <- internet$thai_percentage / 100
+internet$us_percentage <- internet$us_percentage / 100
+internet$thai_num <- prettyNum(round(internet$thai_num,0),big.mark=",",scientific=FALSE)
+internet$us_num <- prettyNum(round(internet$us_num,0),big.mark=",",scientific=FALSE)
+internet <- arrange(internet, -thai_percentage)
+
+internet$diff <- internet$thai_percentage - internet$us_percentage 
+internet$sign <- ifelse(internet$diff>=0, 'pos', 'neg')
+ggplot(internet,aes(x = var,y = diff, fill=sign)) + 
+    xlab('Groups') + 
+    ylab('Diff. Percentage') +
+    geom_bar(stat='identity',position = "dodge") + scale_y_continuous(labels = scales::percent) +
+    scale_fill_manual(values=c('#5E8C6A')) +
+    guides(fill=FALSE) 
+```
+
+```{r internet table}
+internet<-internet[,1:6]
+datatable(internet,
+          colnames = c('Internet' = 1,
+                       '% Thai' = 2,
+                       '# Thai' = 3,
+                       '% US' = 4,
+                       '# US' = 5,
+                       'Z-score' = 6),
+                      class = 'cell-border stripe', 
+rownames = FALSE,
+style='bootstrap',
+options = 
+list( pageLength = 20,
+lengthChange = TRUE,
+dom = 't',
+initComplete = JS(
+"function(settings, json) {",
+"$(this.api().table().header()).css({'background-color': '#446E9B', 'color': '#ffffff'});",
+"}"))) %>% 
+formatPercentage(c('% Thai','% US'), 0) %>%
+formatRound('Z-score',2) %>%
+formatStyle(
+  'Z-score',
+  color = 'white',
+  backgroundColor = styleInterval(c(-2.576,2.576), c('#8C2318','#F2C45A', '#5E8C6A'))
+) 
+```
+
+# Conclusion
+
+We denied the stereotype that Thai people are lazy, confirmed that a lot of them come to open or work in Thai restaurants in the US and are more likely to live in big houses than the general US population. However, we can neither confirm or deny they are gold diggers or are more likely to have broadbrand subscription due to homesickness.

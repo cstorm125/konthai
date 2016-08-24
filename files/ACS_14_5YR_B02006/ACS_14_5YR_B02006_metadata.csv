@@ -1,0 +1,41 @@
+GEO.id,Id
+GEO.id2,Id2
+GEO.display-label,Geography
+HD01_VD01,Estimate; Total:
+HD02_VD01,Margin of Error; Total:
+HD01_VD02,Estimate; Total: - Asian Indian
+HD02_VD02,Margin of Error; Total: - Asian Indian
+HD01_VD03,Estimate; Total: - Bangladeshi
+HD02_VD03,Margin of Error; Total: - Bangladeshi
+HD01_VD04,Estimate; Total: - Cambodian
+HD02_VD04,Margin of Error; Total: - Cambodian
+HD01_VD05,"Estimate; Total: - Chinese , except Taiwanese"
+HD02_VD05,"Margin of Error; Total: - Chinese , except Taiwanese"
+HD01_VD06,Estimate; Total: - Filipino
+HD02_VD06,Margin of Error; Total: - Filipino
+HD01_VD07,Estimate; Total: - Hmong
+HD02_VD07,Margin of Error; Total: - Hmong
+HD01_VD08,Estimate; Total: - Indonesian
+HD02_VD08,Margin of Error; Total: - Indonesian
+HD01_VD09,Estimate; Total: - Japanese
+HD02_VD09,Margin of Error; Total: - Japanese
+HD01_VD10,Estimate; Total: - Korean
+HD02_VD10,Margin of Error; Total: - Korean
+HD01_VD11,Estimate; Total: - Laotian
+HD02_VD11,Margin of Error; Total: - Laotian
+HD01_VD12,Estimate; Total: - Malaysian
+HD02_VD12,Margin of Error; Total: - Malaysian
+HD01_VD13,Estimate; Total: - Pakistani
+HD02_VD13,Margin of Error; Total: - Pakistani
+HD01_VD14,Estimate; Total: - Sri Lankan
+HD02_VD14,Margin of Error; Total: - Sri Lankan
+HD01_VD15,Estimate; Total: - Taiwanese
+HD02_VD15,Margin of Error; Total: - Taiwanese
+HD01_VD16,Estimate; Total: - Thai
+HD02_VD16,Margin of Error; Total: - Thai
+HD01_VD17,Estimate; Total: - Vietnamese
+HD02_VD17,Margin of Error; Total: - Vietnamese
+HD01_VD18,Estimate; Total: - Other Asian
+HD02_VD18,Margin of Error; Total: - Other Asian
+HD01_VD19,"Estimate; Total: - Other Asian, not specified"
+HD02_VD19,"Margin of Error; Total: - Other Asian, not specified"

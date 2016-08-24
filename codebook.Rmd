@@ -1,0 +1,288 @@
+---
+title: "Codebook for Konthai"
+output: 
+  html_document:
+    toc: true # table of content true
+    toc_float: true
+    depth: 3  # upto three depths of headings (specified by #, ## and ###)
+    number_sections: true  ## if you want number sections at each table header
+    theme: spacelab  # many options for theme, this one is my favorite.
+    highlight: tango  # specifies the syntax highlighting style
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+# Executive Summary
+
+This is the codebook for the `konthai` project. It details how these datasets are created:
+
+* `prop_df` The dataset for proportional tests of population characteristics between Thai poeple in the US and the US poopulation
+
+* `county_reg` The dataset for regression analysis with the dependent variable being the number, density and density per area of Thai population and the independent variables being the livability index.
+
+# Load Libraries
+
+```{r library}
+library(data.table)
+library(sqldf)
+```
+
+# Load Datasets
+
+```{r the setup, results='hide'}
+input <- 'files/'
+
+#proportion test function
+test_prop <- function (x1,x2,n1,n2){
+  p_hat <- (x1+x2)/(n1+n2)
+  p1 <- x1/n1
+  p2<- x2/n2
+  numerator <- p1-p2
+  denominator <- sqrt(p_hat*(1-p_hat))*sqrt(1/n1 + 1/n2)
+  numerator/denominator
+}
+
+#livability index AARP Public Policy Institute
+livability <- read.csv(paste0(input,'livability.csv'))
+
+#LANGUAGE SPOKEN AT HOME BY ABILITY TO SPEAK ENGLISH FOR THE POPULATION 5 YEARS AND OVER Universe: Population 5 years and over  more information 2010-2014 American Community Survey 5-Year Estimates
+ACS_14_5YR_B16001 <- read.csv(paste0(input,'ACS_14_5YR_B16001/ACS_14_5YR_B16001_with_ann.csv')
+                              , skip = 1)
+
+#ASIAN ALONE BY SELECTED GROUPS Universe: Total Asian alone population  more information 2010-2014 American Community Survey 5-Year Estimates
+ACS_14_5YR_B02006 <- read.csv(paste0(input,'ACS_14_5YR_B02006/ACS_14_5YR_B02006_with_ann.csv')
+                              , skip = 1)
+
+#SELECTED POPULATION PROFILE IN THE UNITED STATES  more information 2014 American Community Survey 1-Year Estimates
+ACS_14_1YR_S0201 <- read.csv(paste0(input,'ACS_14_1YR_S0201/ACS_14_1YR_S0201_with_ann.csv')
+                             , skip = 1)
+
+#SELECTED POPULATION PROFILE IN THE UNITED STATES  more information 2014 American Community Survey 1-Year Estimates for Thai people
+ACS_14_1YR_S0201_thai <- read.csv(paste0(input,'ACS_14_1YR_S0201_thai/ACS_14_1YR_S0201_with_ann.csv')
+                             , skip = 1)
+
+```
+
+# For the Proportional Tests
+
+Our goal is to perform a series of proportional z-tests between population characteristics of Thai people in the US and the total US population. In order to do that, we transform data from `A2014 American Community Survey 1-Year Estimates` into our desired form `prop_df`. This resulted in 141 variables in 45 categories.
+
+## Transformation
+
+```{r the transformation thai_overall}
+thai_overall <- transpose(ACS_14_1YR_S0201_thai)
+
+#remove ids
+thai_overall <- data.frame(thai_overall[6:nrow(thai_overall),])
+
+
+#get sensible variable names
+thai_overall$var <- sapply(colnames(ACS_14_1YR_S0201_thai[,6:ncol(ACS_14_1YR_S0201_thai)]), 
+                           FUN= function(x) tail(strsplit(x, split='...',fixed=TRUE)[[1]],1))
+
+#get category
+thai_overall$cat <- sapply(colnames(ACS_14_1YR_S0201_thai[,6:ncol(ACS_14_1YR_S0201_thai)]), 
+                           FUN= function(x) tail(strsplit(x, split='...',fixed=TRUE)[[1]],2)[1])
+
+#get detailed category
+thai_overall$d_cat <- sapply(colnames(ACS_14_1YR_S0201_thai[,6:ncol(ACS_14_1YR_S0201_thai)]), 
+                           FUN= function(x) 
+                              paste(
+                              head(strsplit(x, split='...',fixed=TRUE)[[1]],-1)
+                              , collapse = '_')
+                          )
+
+#remove error margins
+thai_overall$iserror <- sapply(colnames(ACS_14_1YR_S0201_thai[,6:ncol(ACS_14_1YR_S0201_thai)]), 
+                           FUN= function(x) grepl(pattern = 'Margin.of.Error',x))
+thai_overall <- thai_overall[thai_overall$iserror==FALSE,]
+
+#make columns look nice
+colnames(thai_overall) <- c('val','var','cat','d_cat','iserror')
+thai_overall <- thai_overall[c('d_cat','cat','var','val')]
+#parse to numeric
+thai_overall$val <- as.numeric(as.character(thai_overall$val))
+
+#separate percentage and total
+thai_overall$istotal <- sapply(thai_overall$cat, 
+                           FUN= function(x) grepl(pattern = 'Estimate',x))
+
+#percentage
+thai_per <- thai_overall[!thai_overall$istotal,]
+
+#total
+thai_total <- thai_overall[thai_overall$istotal & thai_overall$val > 1000,]
+
+#join percentage and total
+thai_pertal <- sqldf("
+select
+  thai_per.d_cat,
+	thai_per.cat,
+	thai_per.var,
+	thai_per.val as percentage,
+	thai_total.val as total
+from thai_per
+inner join thai_total
+on thai_per.cat = thai_total.var
+                   ")
+#remove duplicates
+thai_pertal <- thai_pertal[!duplicated(thai_pertal),]
+
+#calulate number based on percentage
+thai_pertal$num <- (thai_pertal$percentage/100) * thai_pertal$total
+```
+
+
+```{r the transformation us_overall}
+us_overall <- transpose(ACS_14_1YR_S0201)
+
+#remove ids
+us_overall <- data.frame(us_overall[6:nrow(us_overall),])
+
+
+#get sensible variable names
+us_overall$var <- sapply(colnames(ACS_14_1YR_S0201[,6:ncol(ACS_14_1YR_S0201)]), 
+                           FUN= function(x) tail(strsplit(x, split='...',fixed=TRUE)[[1]],1))
+
+#get category
+us_overall$cat <- sapply(colnames(ACS_14_1YR_S0201[,6:ncol(ACS_14_1YR_S0201)]), 
+                           FUN= function(x) tail(strsplit(x, split='...',fixed=TRUE)[[1]],2)[1])
+
+#get detailed category
+us_overall$d_cat<-sapply(colnames(ACS_14_1YR_S0201[,6:ncol(ACS_14_1YR_S0201)]), 
+                           FUN= function(x) 
+                              paste(
+                              head(strsplit(x, split='...',fixed=TRUE)[[1]],-1)
+                              , collapse = '_')
+                          )
+
+#remove error margins
+us_overall$iserror <- sapply(colnames(ACS_14_1YR_S0201[,6:ncol(ACS_14_1YR_S0201)]), 
+                           FUN= function(x) grepl(pattern = 'Margin.of.Error',x))
+us_overall <- us_overall[us_overall$iserror==FALSE,]
+
+#make columns look nice
+colnames(us_overall) <- c('val','var','cat','d_cat','iserror')
+us_overall <- us_overall[c('d_cat','cat','var','val')]
+#parse to numeric
+us_overall$val <- as.numeric(as.character(us_overall$val))
+
+#separate percentage and total
+us_overall$istotal <- sapply(us_overall$cat, 
+                           FUN= function(x) grepl(pattern = 'Estimate',x))
+
+#percentage
+us_per <- us_overall[!us_overall$istotal,]
+
+#total
+us_total <- us_overall[us_overall$istotal & us_overall$val > 1000,]
+
+#join percentage and total
+us_pertal <- sqldf("
+select
+  us_per.d_cat,
+	us_per.cat,
+	us_per.var,
+	us_per.val as percentage,
+	us_total.val as total
+from us_per
+inner join us_total
+on us_per.cat = us_total.var
+                   ")
+#remove duplicates
+us_pertal <- us_pertal[!duplicated(us_pertal),]
+
+#calulate number based on percentage
+us_pertal$num <- (us_pertal$percentage/100) * us_pertal$total
+```
+
+
+```{r join thai_pertal and us_pertal}
+
+prop_df <- sqldf("
+select
+  us_pertal.d_cat,
+	us_pertal.cat,
+	us_pertal.var,
+  us_pertal.percentage as us_percentage,
+	us_pertal.num as us_num,
+	us_pertal.total as us_total,
+  thai_pertal.percentage as thai_percentage,
+	thai_pertal.num as thai_num,
+	thai_pertal.total as thai_total
+from us_pertal
+inner join thai_pertal
+on us_pertal.cat = thai_pertal.cat and
+	us_pertal.var = thai_pertal.var
+                 ")
+prop_df$z_score <- test_prop(prop_df$thai_num, prop_df$us_num, 
+                             prop_df$thai_total, prop_df$us_total)
+
+prop_df <- prop_df[!is.nan(prop_df$z_score),]
+
+prop_df <- prop_df[c('d_cat','var','thai_percentage','thai_num','thai_total',
+                     'us_percentage','us_num','us_total','z_score')]
+#save to csv
+write.table(prop_df, file = paste(input,"prop_df.csv",sep=""), 
+              sep="\t",row.names=FALSE,fileEncoding = "UTF-8",quote = TRUE)
+
+```
+
+## Variable Explanation
+
+* `d_cat` Detailed category of the variable
+
+```{r categories}
+unique(prop_df$d_cat)
+```
+
+* `var` Variable such as male and female
+* `thai_percentage` Percentage of population in the variable for Thai population in the US
+* `thai_num` Number of Thai population in the US for the variable
+* `thai_total` Total number of Thai population in the US for the category
+* `us_percentage` Percentage of population in the variable for US population
+* `thai_num` Number of US population for the variable
+* `thai_total` Total number of US population for the category
+*  `z-score` Z-score for proportional test
+
+# For the Regression Analysis
+
+We combine the `livability` dataset obtained by the script `extract.ipynb` with `Total Asian alone population` and `LANGUAGE SPOKEN AT HOME BY ABILITY TO SPEAK ENGLISH` from `2010-2014 American Community Survey 5-Year Estimates` to get the `county_reg` dataset.
+
+```{r}
+
+county_reg <-data.frame(
+  county = ACS_14_5YR_B02006$Geography,
+  total = ACS_14_5YR_B02006$Estimate..Total.,
+  thai_num=ACS_14_5YR_B02006$Estimate..Total....Thai,
+  thai_per= ACS_14_5YR_B02006$Estimate..Total....Thai / ACS_14_5YR_B02006$Estimate..Total.,
+  thai_vwell=ACS_14_5YR_B16001$Estimate..Total....Thai....Speak.English..very.well.,
+  thai_vwell_per=ACS_14_5YR_B16001$Estimate..Total....Thai....Speak.English..very.well. /
+    ACS_14_5YR_B02006$Estimate..Total....Thai,
+  thai_less=ACS_14_5YR_B16001$Estimate..Total....Thai....Speak.English.less.than..very.well.,
+    thai_less_per=ACS_14_5YR_B16001$Estimate..Total....Thai....Speak.English.less.than..very.well.
+    / ACS_14_5YR_B02006$Estimate..Total....Thai
+)
+
+county_reg <- cbind(county_reg,
+                    subset(livability, select = -c(county)))
+
+#save to csv
+write.table(county_reg, file = paste(input,"county_reg.csv",sep=""), 
+              sep="\t",row.names=FALSE,fileEncoding = "UTF-8",quote = TRUE)
+
+```
+
+## Variable Explanation
+
+* `count` County name
+* `total` Total population of the county
+* `thai_num` Number of Thai people
+* `thai_num_per` Percentage of Thai people over total population
+* `thai_vwell` Number of Thai people who speak English very well
+* `thai_vwell_per` Percentage of Thai people who speak English very well
+* `thai_less` Number of Thai people who speak English less than very well
+* `thai_less_per` Percentage of Thai people who speak English less than very well
+* `engagement`, `environment`, `health`, `housing`, `neighborhood`, `opportunity`, and `transportation` Scoring variables out of 100 from [AARP Livability Index](http://www.aarp.org/ppi/issues/livable-communities/info-2015/livability-index.html)
